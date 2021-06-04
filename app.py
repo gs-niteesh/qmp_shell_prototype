@@ -61,7 +61,7 @@ class App(QMP):
 
     async def _kill_app(self):
         # It is ok to call disconnect even in disconnect state
-        await self.aloop.create_task(self.disconnect())
+        await self.disconnect()
         logging.info('disconnect finished, Exiting app')
         raise ExitAppError()
 
