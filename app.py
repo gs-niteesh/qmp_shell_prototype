@@ -52,15 +52,6 @@ class App(QMP):
         for sig in cancel_signals:
             self.aloop.add_signal_handler(sig, self.kill_app)
 
-    async def _do_recv(self):
-        try:
-            msg = await super()._do_recv()
-        except EOFError as err:
-            logging.debug('Received EOF')
-            # TODO: How to handle EOFError?
-            msg = None
-        return msg
-
     def unhandled_input(self, key):
         if key == 'esc':
             self.kill_app()
