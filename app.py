@@ -4,9 +4,12 @@ import asyncio
 import logging
 import signal
 
+from blinker import Signal
 from aqmp.message import Message
 from aqmp.qmp_protocol import QMP
 from aqmp.error import ConnectError
+
+statusbar_update = Signal()
 
 address = ()
 
@@ -14,6 +17,19 @@ logging.basicConfig(filename='log.txt', level=logging.DEBUG)
 
 class ExitAppError(Exception):
     pass
+
+class StatusBar(urwid.Text):
+    def __init__(self, text=''):
+        super().__init__(text)
+        statusbar_update.connect(self.update_text)
+
+    def update_text(self, sender, updated_text=''):
+        self.set_text(updated_text)
+
+class Window(urwid.Frame):
+    def __init__(self, body, header=None, footer=None):
+        footer = StatusBar('Connected to {address}')
+        super().__init__(body, header, footer)
 
 class App(QMP):
     def __init__(self):
@@ -23,8 +39,7 @@ class App(QMP):
 
         self.flows = urwid.SimpleFocusListWalker([])
         self.history = urwid.ListBox(self.flows)
-        self.status = urwid.Text(f'Connected to {address[0]}:{address[1]}')
-        self.window = urwid.Frame(self.history, footer=self.status)
+        self.window = Window(self.history)
 
         self.aloop = asyncio.get_event_loop()
         self.aloop.set_debug(True)
@@ -64,7 +79,7 @@ class App(QMP):
         if self.flows:
             self.flows.set_focus(len(self.flows) - 1)
         if event['event'] == 'SHUTDOWN':
-            self.status.set_text('Server shutdown')
+            statusbar_update.send(self, updated_text='Server shutdown')
 
     async def connect_server(self):
         try:
