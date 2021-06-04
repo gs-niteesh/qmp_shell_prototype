@@ -10,6 +10,7 @@ from aqmp.qmp_protocol import QMP
 from aqmp.error import ConnectError
 
 statusbar_update = Signal()
+msg_update = Signal()
 
 address = ()
 
@@ -20,26 +21,49 @@ class ExitAppError(Exception):
 
 class StatusBar(urwid.Text):
     def __init__(self, text=''):
-        super().__init__(text)
+        super().__init__(text, align='right')
         statusbar_update.connect(self.update_text)
 
     def update_text(self, sender, updated_text=''):
         self.set_text(updated_text)
 
+class CustomEdit(urwid.Edit):
+    def __init__(self):
+        super().__init__(caption='> ', multiline=True)
+
+    def keypress(self, size, key):
+        if key == 'meta enter':
+            msg_update.send(self, msg=self.get_edit_text())
+            self.set_edit_text('')
+        return super().keypress(size, key)
+
+class HistoryWindow(urwid.Frame):
+    def __init__(self):
+        self.footer = urwid.Pile([urwid.Divider('_', 0, 0), CustomEdit(), urwid.Divider('_',0, 0)])
+        self.flows = urwid.SimpleFocusListWalker([])
+        self.body = urwid.ListBox(self.flows)
+        super().__init__(self.body, footer=self.footer)
+        msg_update.connect(self.add_to_list)
+
+    def add_to_list(self, sender, msg):
+        self.flows.append(urwid.Text(str(msg)))
+        if self.flows:
+            self.flows.set_focus(len(self.flows) - 1)
+
 class Window(urwid.Frame):
-    def __init__(self, body, header=None, footer=None):
-        footer = StatusBar('Connected to {address}')
-        super().__init__(body, header, footer)
+    def __init__(self):
+        footer = StatusBar(f'Connected to {address[0]}:{address[1]}')
+        self.stack = []
+        body = HistoryWindow()
+        super().__init__(body, footer=footer)
+        logging.debug('Window initialized')
 
 class App(QMP):
     def __init__(self):
         super().__init__()
         self.on_event(self.add_to_list)
         self.server_disconnected = False
-
-        self.flows = urwid.SimpleFocusListWalker([])
-        self.history = urwid.ListBox(self.flows)
-        self.window = Window(self.history)
+        self.window = Window()
 
         self.aloop = asyncio.get_event_loop()
         self.aloop.set_debug(True)
@@ -66,9 +90,7 @@ class App(QMP):
         raise ExitAppError()
 
     async def add_to_list(self, qmp, event):
-        self.flows.append(urwid.Text(f'{event}'))
-        if self.flows:
-            self.flows.set_focus(len(self.flows) - 1)
+        msg_update.send(self, msg=event)
         if event['event'] == 'SHUTDOWN':
             statusbar_update.send(self, updated_text='Server shutdown')
 
