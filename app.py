@@ -5,11 +5,13 @@ import asyncio
 import logging
 import signal
 import urwid_readline
+import pygments.token
 
 from blinker import Signal
 from aqmp.message import Message
 from aqmp.qmp_protocol import QMP
 from aqmp.error import ConnectError
+from pygments import highlight, lexers, formatters
 
 statusbar_update = Signal()
 msg_update = Signal()
@@ -18,6 +20,26 @@ send_msg = Signal()
 address = ()
 
 logging.basicConfig(filename='log.txt', level=logging.DEBUG)
+
+palette = [
+  (pygments.token.Comment, urwid.LIGHT_GRAY, urwid.DEFAULT),
+  (pygments.token.Literal.String.Doc, urwid.LIGHT_RED, urwid.DEFAULT),
+  (pygments.token.Name.Namespace, urwid.LIGHT_BLUE, urwid.DEFAULT),
+  (pygments.token.Name.Tag, urwid.DARK_CYAN, urwid.DEFAULT),
+  (pygments.token.Text, urwid.WHITE, urwid.DEFAULT),
+  (pygments.token.Operator.Word, urwid.DARK_GREEN, urwid.DEFAULT),
+  (pygments.token.Name, urwid.WHITE, urwid.DEFAULT),
+  (pygments.token.Punctuation, urwid.WHITE, urwid.DEFAULT),
+  (pygments.token.Keyword, urwid.DARK_GREEN, urwid.DEFAULT),
+  (pygments.token.Name.Function, urwid.LIGHT_BLUE, urwid.DEFAULT),
+  (pygments.token.Name.Class, urwid.LIGHT_BLUE, urwid.DEFAULT),
+  (pygments.token.Keyword.Namespace, urwid.DARK_GREEN, urwid.DEFAULT),
+  (pygments.token.Name.Builtin.Pseudo, urwid.DARK_CYAN, urwid.DEFAULT),
+  (pygments.token.Operator, urwid.WHITE, urwid.DEFAULT),
+  (pygments.token.Literal.Number.Integer, urwid.DARK_RED, urwid.DEFAULT),
+  (pygments.token.Literal.String.Double, urwid.YELLOW, urwid.DEFAULT),
+  (pygments.token.Literal.String.Single, urwid.YELLOW, urwid.DEFAULT),
+]
 
 class ExitAppError(Exception):
     pass
@@ -68,7 +90,12 @@ class HistoryWindow(urwid.Frame):
         msg_update.connect(self.add_to_list)
 
     def add_to_list(self, sender, msg):
-        self.flows.append(urwid.Text(str(msg)))
+        #msg = highlight(str(msg), lexers.JsonLexer(), formatters.TerminalFormatter())
+        formatted = []
+        for token in lexers.JsonLexer().get_tokens(str(msg)):
+            logging.info(token)
+            formatted.append(token)
+        self.flows.append(urwid.Text(formatted))
         if self.flows:
             self.flows.set_focus(len(self.flows) - 1)
 
@@ -92,6 +119,7 @@ class App(QMP):
         event_loop = urwid.AsyncioEventLoop(loop=self.aloop)
         self.loop = urwid.MainLoop(self.window,
                                    unhandled_input=self.unhandled_input,
+                                   palette=palette,
                                    event_loop=event_loop)
 
         cancel_signals = [signal.SIGTERM, signal.SIGINT]
