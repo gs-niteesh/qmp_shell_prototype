@@ -3,6 +3,7 @@ import urwid
 import asyncio
 import logging
 import signal
+import urwid_readline
 
 from blinker import Signal
 from aqmp.message import Message
@@ -11,6 +12,7 @@ from aqmp.error import ConnectError
 
 statusbar_update = Signal()
 msg_update = Signal()
+send_msg = Signal()
 
 address = ()
 
@@ -27,15 +29,34 @@ class StatusBar(urwid.Text):
     def update_text(self, sender, updated_text=''):
         self.set_text(updated_text)
 
-class CustomEdit(urwid.Edit):
+class CustomEdit(urwid_readline.ReadlineEdit):
     def __init__(self):
         super().__init__(caption='> ', multiline=True)
+        self.history = []
+        self.last_index = -1;
+        self.show_history = False
 
     def keypress(self, size, key):
-        if key == 'meta enter':
-            msg_update.send(self, msg=self.get_edit_text())
+        msg = self.get_edit_text()
+        if key == 'up' and not msg:
+            self.show_history = True
+            last_msg = self.history[self.last_index] if self.history else ''
+            self.set_edit_text(last_msg)
+            self.last_index += 1
+        elif key == 'up' and self.show_history:
+            if self.last_index < len(self.history):
+                self.set_edit_text(self.history[self.last_index])
+                self.last_index += 1
+        elif key == 'meta enter':
+            send_msg.send(self, msg=msg)
+            self.history.insert(0, msg)
             self.set_edit_text('')
-        return super().keypress(size, key)
+            self.last_index = 0
+            self.show_history = False
+        else:
+            self.show_history = False
+            self.last_index = 0
+            return super().keypress(size, key)
 
 class HistoryWindow(urwid.Frame):
     def __init__(self):
