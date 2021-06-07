@@ -1,4 +1,5 @@
 import sys
+import json
 import urwid
 import asyncio
 import logging
@@ -96,6 +97,23 @@ class App(QMP):
         cancel_signals = [signal.SIGTERM, signal.SIGINT]
         for sig in cancel_signals:
             self.aloop.add_signal_handler(sig, self.kill_app)
+        send_msg.connect(self.send_to_server)
+
+    async def _send_to_server(self, msg):
+        try:
+            msg = json.loads(str(msg))
+            cmd = msg['execute']
+            args = msg.get('arguments')
+            response = await self.execute(cmd, args)
+            logging.info('Response: %s %s', response, type(response))
+            response = json.dumps(response, indent=2)
+            logging.info('Response: %s %s', response, type(response))
+            msg_update.send(self, msg=response)
+        except Exception as e:
+            logging.info('Exception from _send_to_server: %s', str(e))
+
+    def send_to_server(self, sender, msg):
+        asyncio.create_task(self._send_to_server(msg))
 
     def unhandled_input(self, key):
         if key == 'esc':
