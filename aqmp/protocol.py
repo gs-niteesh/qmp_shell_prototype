@@ -542,6 +542,10 @@ class AsyncProtocol(Generic[T]):
             self.logger.debug("Task.%s: cancelled: %s.",
                               name, type(err).__name__)
             raise
+        except EOFError as err:
+            self.logger.debug("Task.%s: EOF: %s", name, type(err).__name__)
+            self._schedule_disconnect()
+            raise
         except:
             self.logger.error("Task.%s: failure:\n%s\n", name,
                               pretty_traceback())
